@@ -8,6 +8,8 @@ use ClassViewer\Command\ScanCommand;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
 final class ScanCommandTest extends TestCase
@@ -110,9 +112,17 @@ final class ScanCommandTest extends TestCase
     public function failsWhenArgumentMissing(): void
     {
         // C3.3
-        $tester = $this->runScan(null);
+        $application = new Application();
+        $application->add(new ScanCommand());
+        $application->setDefaultCommand('scan', true);
+        $application->setAutoExit(false);
+        $application->setCatchExceptions(true);
 
-        self::assertNotSame(0, $tester->getStatusCode());
+        $output = new BufferedOutput();
+        $statusCode = $application->run(new ArrayInput([]), $output);
+
+        self::assertNotSame(0, $statusCode);
+        self::assertStringContainsString('path', $output->fetch());
     }
 
     private function runScan(?string $path): CommandTester
