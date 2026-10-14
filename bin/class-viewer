@@ -1,0 +1,17 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use ClassViewer\Command\ScanCommand;
+use Symfony\Component\Console\Application;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+$command = new ScanCommand();
+
+$application = new Application('class-viewer');
+$application->add($command);
+$application->setDefaultCommand((string) $command->getName(), true);
+
+$application->run();

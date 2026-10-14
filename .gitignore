@@ -2,3 +2,6 @@
 *.phar
 .idea/
 .phpunit.result.cache
+/.phpunit.cache/
+/.php-cs-fixer.cache
+/infection.log
