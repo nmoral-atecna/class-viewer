@@ -3,6 +3,9 @@
     "source": {
         "directories": ["src"]
     },
+    "phpUnit": {
+        "customPath": "vendor/bin/phpunit"
+    },
     "mutators": {
         "@default": true
     }

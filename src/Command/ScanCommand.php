@@ -8,8 +8,8 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(name: 'scan', description: 'List PHP files of a target project.')]
 final class ScanCommand extends Command
@@ -25,9 +25,10 @@ final class ScanCommand extends Command
         $path = $input->getArgument('path');
 
         if (!is_dir($path)) {
-            $errorOutput = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
             $reason = file_exists($path) ? "n'est pas un répertoire" : 'est introuvable';
-            $errorOutput->writeln(sprintf('<error>Le chemin "%s" %s.</error>', $path, $reason));
+            (new SymfonyStyle($input, $output))
+                ->getErrorStyle()
+                ->writeln(sprintf('<error>Le chemin "%s" %s.</error>', $path, $reason));
 
             return Command::FAILURE;
         }
@@ -44,8 +45,7 @@ final class ScanCommand extends Command
      */
     private function scan(string $directory): array
     {
-        $flags = \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::UNIX_PATHS;
-        $directoryIterator = new \RecursiveDirectoryIterator($directory, $flags);
+        $directoryIterator = new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS);
 
         $filter = new \RecursiveCallbackFilterIterator(
             $directoryIterator,

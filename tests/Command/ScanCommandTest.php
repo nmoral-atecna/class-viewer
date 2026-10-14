@@ -27,6 +27,16 @@ final class ScanCommandTest extends TestCase
     }
 
     #[Test]
+    public function stripsTrailingSlashFromTargetPath(): void
+    {
+        // C1.1 variant: a trailing slash must not leak into relative paths
+        $tester = $this->runScan(self::FIXTURES . '/nominal/');
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame("src/Foo.php\nsrc/Sub/Bar.php\n", $tester->getDisplay());
+    }
+
+    #[Test]
     public function outputsNothingWhenNoPhpFile(): void
     {
         // C1.2
