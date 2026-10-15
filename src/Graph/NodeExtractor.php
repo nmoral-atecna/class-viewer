@@ -27,4 +27,22 @@ final class NodeExtractor
 
         return $collector->nodes;
     }
+
+    /**
+     * @return list<array{from: string, to: string}>
+     *
+     * @throws \PhpParser\Error on invalid syntax
+     */
+    public function extractEdges(string $code): array
+    {
+        $parser = (new ParserFactory())->createForNewestSupportedVersion();
+        $ast = $parser->parse($code) ?? [];
+
+        $collector = new DependencyCollectingVisitor();
+
+        $traverser = new NodeTraverser(new NameResolver(), $collector);
+        $traverser->traverse($ast);
+
+        return $collector->edges;
+    }
 }

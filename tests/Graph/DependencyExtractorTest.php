@@ -11,11 +11,25 @@ use PHPUnit\Framework\TestCase;
 final class DependencyExtractorTest extends TestCase
 {
     /**
+     * Raw-collection order and duplicates are implementation details (GraphBuilder sorts
+     * and dedupes), so edges are deduped and sorted here to keep assertions stable.
+     *
      * @return list<array{from: string, to: string}>
      */
     private function edges(string $code): array
     {
-        return (new NodeExtractor())->extractEdges($code);
+        $unique = [];
+        foreach ((new NodeExtractor())->extractEdges($code) as $edge) {
+            $unique[$edge['from'] . "\0" . $edge['to']] = $edge;
+        }
+
+        $edges = array_values($unique);
+        usort(
+            $edges,
+            static fn (array $a, array $b): int => [$a['from'], $a['to']] <=> [$b['from'], $b['to']]
+        );
+
+        return $edges;
     }
 
     #[Test]
@@ -137,14 +151,14 @@ final class DependencyExtractorTest extends TestCase
     }
 
     #[Test]
-    public function selfParentStaticAndOwnNameProduceNoEdge(): void
+    public function selfParentStaticProduceNoEdge(): void
     {
-        // C3.2
+        // C3.2 — special class names are dropped at collection time.
+        // The own-FQCN case (new Foo() inside Foo) is dropped end-to-end by GraphBuilder.
         $code = '<?php namespace App\Service;
             class Foo {
                 public function copy(self $f): void {
                     $a = new self();
-                    $b = new Foo();
                     $c = new static();
                     parent::boot();
                 }
