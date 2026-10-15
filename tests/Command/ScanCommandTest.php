@@ -15,52 +15,81 @@ use Symfony\Component\Console\Tester\CommandTester;
 final class ScanCommandTest extends TestCase
 {
     private const FIXTURES = __DIR__ . '/../fixtures';
+    private const GRAPH = self::FIXTURES . '/graph';
 
     #[Test]
-    public function listsPhpFilesRecursivelySortedAlphabetically(): void
+    public function printsValidGraphJsonOnStdout(): void
     {
         // C1.1
-        $tester = $this->runScan(self::FIXTURES . '/nominal');
+        $tester = $this->runScan(self::GRAPH . '/nominal');
 
         self::assertSame(0, $tester->getStatusCode());
-        self::assertSame("src/Foo.php\nsrc/Sub/Bar.php\n", $tester->getDisplay());
+
+        $display = $tester->getDisplay();
+        self::assertStringContainsString("\n    ", $display, 'JSON must be pretty-printed');
+
+        $graph = $this->decode($tester);
+        self::assertSame(1, $graph['version']);
+        self::assertSame([], $graph['edges']);
+        self::assertCount(4, $graph['nodes']);
     }
 
     #[Test]
-    public function stripsTrailingSlashFromTargetPath(): void
-    {
-        // C1.1 variant: a trailing slash must not leak into relative paths
-        $tester = $this->runScan(self::FIXTURES . '/nominal/');
-
-        self::assertSame(0, $tester->getStatusCode());
-        self::assertSame("src/Foo.php\nsrc/Sub/Bar.php\n", $tester->getDisplay());
-    }
-
-    #[Test]
-    public function outputsNothingWhenNoPhpFile(): void
+    public function printsNodesSortedById(): void
     {
         // C1.2
-        $tester = $this->runScan(self::FIXTURES . '/no_php');
+        $tester = $this->runScan(self::GRAPH . '/nominal');
 
-        self::assertSame(0, $tester->getStatusCode());
-        self::assertSame('', $tester->getDisplay());
+        $ids = array_column($this->decode($tester)['nodes'], 'id');
+
+        self::assertSame([
+            'App\Behavior\Baz',
+            'App\Contract\Bar',
+            'App\Service\Foo',
+            'App\Status',
+        ], $ids);
     }
 
     #[Test]
-    public function keepsOnlyLowercasePhpExtension(): void
+    public function printsEmptyGraphForProjectWithoutDeclaration(): void
     {
-        // C1.3
-        $tester = $this->runScan(self::FIXTURES . '/extensions');
+        // C7.1
+        $tester = $this->runScan(self::GRAPH . '/empty');
 
         self::assertSame(0, $tester->getStatusCode());
-        self::assertSame("Foo.php\n", $tester->getDisplay());
+        self::assertSame(
+            ['version' => 1, 'nodes' => [], 'edges' => []],
+            $this->decode($tester)
+        );
+    }
+
+    #[Test]
+    public function warnsOnStderrForUnparsableFileAndStillSucceeds(): void
+    {
+        // C5.1
+        $tester = $this->runScan(self::GRAPH . '/parse_error');
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame(['App\Valid'], array_column($this->decode($tester)['nodes'], 'id'));
+        self::assertStringContainsString('src/Broken.php', $tester->getErrorOutput());
+    }
+
+    #[Test]
+    public function warnsOnStderrForDuplicateFqcn(): void
+    {
+        // C6.1
+        $tester = $this->runScan(self::GRAPH . '/dup');
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame(['App\After', 'App\Dup'], array_column($this->decode($tester)['nodes'], 'id'));
+        self::assertStringContainsString('App\Dup', $tester->getErrorOutput());
     }
 
     #[Test]
     public function doesNotWriteIntoTargetDirectory(): void
     {
-        // C1.4
-        $target = self::FIXTURES . '/nominal';
+        // C1: rien écrit dans le projet cible
+        $target = self::GRAPH . '/nominal';
         $before = $this->snapshot($target);
 
         $this->runScan($target);
@@ -69,39 +98,8 @@ final class ScanCommandTest extends TestCase
     }
 
     #[Test]
-    public function excludesVendorDirectoryAtRoot(): void
-    {
-        // C2.1
-        $tester = $this->runScan(self::FIXTURES . '/vendor_root');
-
-        self::assertSame(0, $tester->getStatusCode());
-        self::assertSame("src/Foo.php\n", $tester->getDisplay());
-    }
-
-    #[Test]
-    public function excludesNestedVendorDirectory(): void
-    {
-        // C2.2
-        $tester = $this->runScan(self::FIXTURES . '/vendor_nested');
-
-        self::assertSame(0, $tester->getStatusCode());
-        self::assertSame("app/Keep.php\n", $tester->getDisplay());
-    }
-
-    #[Test]
-    public function keepsFileNamedVendorPhp(): void
-    {
-        // C2.3
-        $tester = $this->runScan(self::FIXTURES . '/vendor_file');
-
-        self::assertSame(0, $tester->getStatusCode());
-        self::assertSame("src/vendor.php\n", $tester->getDisplay());
-    }
-
-    #[Test]
     public function failsWhenPathIsAbsent(): void
     {
-        // C3.1
         $tester = $this->runScan('/does/not/exist');
 
         self::assertNotSame(0, $tester->getStatusCode());
@@ -111,8 +109,7 @@ final class ScanCommandTest extends TestCase
     #[Test]
     public function failsWhenPathIsAFile(): void
     {
-        // C3.2
-        $tester = $this->runScan(self::FIXTURES . '/nominal/src/Foo.php');
+        $tester = $this->runScan(self::GRAPH . '/nominal/src/Status.php');
 
         self::assertNotSame(0, $tester->getStatusCode());
         self::assertStringContainsString("n'est pas un répertoire", $tester->getErrorOutput());
@@ -121,7 +118,6 @@ final class ScanCommandTest extends TestCase
     #[Test]
     public function failsWhenArgumentMissing(): void
     {
-        // C3.3
         $application = new Application();
         $application->add(new ScanCommand());
         $application->setDefaultCommand('scan', true);
@@ -133,6 +129,17 @@ final class ScanCommandTest extends TestCase
 
         self::assertNotSame(0, $statusCode);
         self::assertStringContainsString('path', $output->fetch());
+    }
+
+    /**
+     * @return array{version: int, nodes: list<array<string, string>>, edges: list<mixed>}
+     */
+    private function decode(CommandTester $tester): array
+    {
+        /** @var array{version: int, nodes: list<array<string, string>>, edges: list<mixed>} $graph */
+        $graph = json_decode($tester->getDisplay(), true, 512, JSON_THROW_ON_ERROR);
+
+        return $graph;
     }
 
     private function runScan(?string $path): CommandTester
