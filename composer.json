@@ -5,6 +5,7 @@
     "license": "proprietary",
     "require": {
         "php": ">=8.5",
+        "nikic/php-parser": "^5.9",
         "symfony/console": "^7.0"
     },
     "require-dev": {
