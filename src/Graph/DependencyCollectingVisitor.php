@@ -6,7 +6,6 @@ namespace ClassViewer\Graph;
 
 use PhpParser\Node;
 use PhpParser\Node\Attribute;
-use PhpParser\Node\ComplexType;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\Instanceof_;
 use PhpParser\Node\Expr\New_;
@@ -100,28 +99,18 @@ final class DependencyCollectingVisitor extends NodeVisitorAbstract
             return;
         }
 
+        // Identifier (native scalar) carries no class reference.
         if ($type instanceof UnionType || $type instanceof IntersectionType) {
             foreach ($type->types as $member) {
                 $this->collectType($member);
             }
-
-            return;
-        }
-
-        // Identifier (native scalar) and other ComplexType carry no class reference here.
-        if ($type instanceof ComplexType) {
-            return;
         }
     }
 
     private function collectName(Name $name): void
     {
-        if ($name->isSpecialClassName()) {
-            return;
-        }
-
         $from = end($this->classStack);
-        if (false === $from || '' === $from) {
+        if (!is_string($from) || '' === $from || $name->isSpecialClassName()) {
             return;
         }
 

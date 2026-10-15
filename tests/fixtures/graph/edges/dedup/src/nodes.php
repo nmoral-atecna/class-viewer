@@ -10,15 +10,12 @@ class Bar
 
 class Foo
 {
-    private Bar $bar;
-
-    public function __construct(Bar $bar)
+    // A dropped reference (self) precedes a kept one, so dedup must `continue`, not `break`.
+    public function __construct(Foo $self, Bar $bar)
     {
         $this->bar = $bar;
     }
 
-    public function clone(): self
-    {
-        return new Foo();
-    }
+    // Bar referenced twice (param + property) to exercise dedup.
+    private Bar $bar;
 }

@@ -168,6 +168,112 @@ final class DependencyExtractorTest extends TestCase
     }
 
     #[Test]
+    public function newExpressionProducesEdge(): void
+    {
+        // C1.3 (New_)
+        $code = '<?php namespace App; use App\Thing; class Foo { public function m() { new Thing(); } }';
+
+        self::assertSame([['from' => 'App\Foo', 'to' => 'App\Thing']], $this->edges($code));
+    }
+
+    #[Test]
+    public function classConstFetchProducesEdge(): void
+    {
+        // C1.3 (::class / ::CONST)
+        $code = '<?php namespace App; use App\Thing; class Foo { public function m() { Thing::class; } }';
+
+        self::assertSame([['from' => 'App\Foo', 'to' => 'App\Thing']], $this->edges($code));
+    }
+
+    #[Test]
+    public function staticCallProducesEdge(): void
+    {
+        // C1 (StaticCall)
+        $code = '<?php namespace App; use App\Thing; class Foo { public function m() { Thing::run(); } }';
+
+        self::assertSame([['from' => 'App\Foo', 'to' => 'App\Thing']], $this->edges($code));
+    }
+
+    #[Test]
+    public function staticPropertyFetchProducesEdge(): void
+    {
+        // C1 (StaticPropertyFetch)
+        $code = '<?php namespace App; use App\Thing; class Foo { public function m() { return Thing::$shared; } }';
+
+        self::assertSame([['from' => 'App\Foo', 'to' => 'App\Thing']], $this->edges($code));
+    }
+
+    #[Test]
+    public function instanceofProducesEdge(): void
+    {
+        // C1 (Instanceof_)
+        $code = '<?php namespace App; use App\Thing; class Foo { public function m($o) { return $o instanceof Thing; } }';
+
+        self::assertSame([['from' => 'App\Foo', 'to' => 'App\Thing']], $this->edges($code));
+    }
+
+    #[Test]
+    public function dynamicClassExpressionProducesNoEdge(): void
+    {
+        // $node->class may be an Expr (dynamic) rather than a Name: no edge.
+        $code = '<?php namespace App; class Foo { public function m($cls) { return new $cls(); } }';
+
+        self::assertSame([], $this->edges($code));
+    }
+
+    #[Test]
+    public function referenceOutsideAnyClassProducesNoEdge(): void
+    {
+        // Empty class stack: a top-level reference has no "from".
+        $code = '<?php namespace App; use App\Thing; new Thing();';
+
+        self::assertSame([], $this->edges($code));
+    }
+
+    #[Test]
+    public function referenceInsideAnonymousClassProducesNoEdge(): void
+    {
+        // Anonymous classes have no FQCN node, so references inside them yield no edge.
+        $code = '<?php namespace App; use App\Thing; $x = new class { public function m() { new Thing(); } };';
+
+        self::assertSame([], $this->edges($code));
+    }
+
+    #[Test]
+    public function siblingClassesKeepTheirOwnFrom(): void
+    {
+        // Leaving a class pops the stack, so the next sibling uses its own FQCN.
+        $code = '<?php namespace App;
+            use App\Thing;
+            class A { public function m(): Thing {} }
+            class B { public function n(): Thing {} }';
+
+        self::assertSame(
+            [
+                ['from' => 'App\A', 'to' => 'App\Thing'],
+                ['from' => 'App\B', 'to' => 'App\Thing'],
+            ],
+            $this->edges($code)
+        );
+    }
+
+    #[Test]
+    public function referenceAfterNestedAnonymousClassBindsToOuterClass(): void
+    {
+        // Leaving the anonymous class must pop the stack, restoring the outer "from".
+        $code = '<?php namespace App;
+            use App\Thing;
+            class Outer {
+                public function m() {
+                    $x = new class {};
+                    return new Thing();
+                }
+            }';
+
+        self::assertSame([['from' => 'App\Outer', 'to' => 'App\Thing']], $this->edges($code));
+    }
+
+    #[Test]
     public function internalAttribute(): void
     {
         // C6.1

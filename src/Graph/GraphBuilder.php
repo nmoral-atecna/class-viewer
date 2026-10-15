@@ -65,16 +65,23 @@ final class GraphBuilder
      */
     private function resolveEdges(array $rawEdges, array $nodes): array
     {
-        $unique = [];
+        /** @var array<string, array<string, array{from: string, to: string}>> $byPair */
+        $byPair = [];
         foreach ($rawEdges as $edge) {
             if ($edge['from'] === $edge['to'] || !isset($nodes[$edge['to']])) {
                 continue;
             }
 
-            $unique[$edge['from'] . "\0" . $edge['to']] = $edge;
+            $byPair[$edge['from']][$edge['to']] = $edge;
         }
 
-        $edges = array_values($unique);
+        $edges = [];
+        foreach ($byPair as $byTo) {
+            foreach ($byTo as $edge) {
+                $edges[] = $edge;
+            }
+        }
+
         usort(
             $edges,
             static fn (array $a, array $b): int => [$a['from'], $a['to']] <=> [$b['from'], $b['to']]
