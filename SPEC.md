@@ -36,10 +36,20 @@ En plus de la navigation par clic :
 
 ### Dans le périmètre
 - Langage source : **PHP** (projets Symfony/Doctrine).
-- Un **seul type de lien** : **dépendances** (ce qu'une classe utilise).
-  - paramètres de constructeur typés (injection de dépendances),
-  - propriétés typées,
-  - `use` résolus en FQCN et réellement référencés dans le corps.
+- Un **seul type de lien** : **dépendances** (ce qu'une classe utilise). Une
+  arête `{from, to}` est émise, en FQCN résolues, dès qu'une classe interne est
+  référencée via :
+  - un paramètre typé (constructeur ou autre méthode, injection de dépendances),
+  - une propriété typée,
+  - un type de retour de méthode,
+  - une référence dans le corps : `new`, `::class` / `::CONST`, appel statique,
+    accès à une propriété statique, `instanceof`,
+  - un attribut PHP (`#[...]`) porté par la classe.
+  - Les types union, nullables (`?T`) et intersection sont parcourus membre par
+    membre ; chaque membre interne donne une arête.
+- Ne comptent **pas** comme dépendances : l'héritage (`extends`, `implements`,
+  trait `use`) et les auto-références (`self`, `static`, `parent`, ou la classe
+  par son propre nom).
 - Distribution **standalone** : un seul fichier **PHAR**. On le pose où on veut et
   on le lance contre un projet cible — **aucune installation dans le projet cible**,
   aucun `composer require`.
@@ -69,8 +79,12 @@ pivot interne, mais il finit **embarqué** dans le HTML de sortie.
   fidèle : non.
 - Parcourt les fichiers `.php`, construit pour chaque classe/interface/enum :
   son FQCN, son namespace, son fichier, et la liste des FQCN dont elle dépend.
-- Ne garde que les dépendances **internes au projet** (on jette les classes du
-  vendor par défaut, filtrable).
+- Ne garde que les dépendances **internes au projet** — une arête n'est produite
+  que si sa cible (`to`) est l'`id` d'un nœud du projet ; les classes vendor et
+  natives PHP, sans nœud, sont exclues de fait (filtrable plus tard).
+- Dédoublonne les arêtes (un même couple `{from, to}` atteint par plusieurs
+  références ne donne qu'une arête) et exclut les auto-références (`from == to`).
+- Trie les arêtes par `(from, to)` (sortie déterministe, rejouable).
 - Écrit `graph.json`.
 - Prérequis d'exécution : PHP + Composer (pour *lancer* le scan uniquement ; le
   viewer, lui, n'a besoin de rien).

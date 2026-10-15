@@ -106,4 +106,57 @@ final class GraphBuilderTest extends TestCase
             $result->graph
         );
     }
+
+    #[Test]
+    public function emitsInternalEdgesFromConstructorAndProperty(): void
+    {
+        // C1.1, C1.2, C2, C5
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/edges/nominal');
+
+        self::assertSame(
+            [
+                ['from' => 'App\Service\Foo', 'to' => 'App\Log\Logger'],
+                ['from' => 'App\Service\Foo', 'to' => 'App\Repository\BarRepository'],
+            ],
+            $result->graph['edges']
+        );
+    }
+
+    #[Test]
+    public function dropsReferencesToVendorAndNativeClasses(): void
+    {
+        // C2.1, C2.2
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/edges/external');
+
+        self::assertSame([], $result->graph['edges']);
+    }
+
+    #[Test]
+    public function dedupesEdgesAndExcludesSelfReference(): void
+    {
+        // C3.1, C3.2
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/edges/dedup');
+
+        self::assertSame(
+            [['from' => 'App\Foo', 'to' => 'App\Bar']],
+            $result->graph['edges']
+        );
+    }
+
+    #[Test]
+    public function sortsEdgesByFromThenTo(): void
+    {
+        // C5.1
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/edges/sort');
+
+        self::assertSame(
+            [
+                ['from' => 'App\Early', 'to' => 'App\Mid'],
+                ['from' => 'App\Foo', 'to' => 'App\Alpha'],
+                ['from' => 'App\Foo', 'to' => 'App\Mid'],
+                ['from' => 'App\Foo', 'to' => 'App\Zeta'],
+            ],
+            $result->graph['edges']
+        );
+    }
 }

@@ -18,6 +18,8 @@ final class GraphBuilder
         $warnings = [];
         /** @var array<string, array{id: string, name: string, ns: string, kind: string, file: string}> $nodes */
         $nodes = [];
+        /** @var list<array{from: string, to: string}> $rawEdges */
+        $rawEdges = [];
 
         foreach ($this->discover($directory) as $relativeFile) {
             $code = file_get_contents($directory . '/' . $relativeFile);
@@ -25,6 +27,8 @@ final class GraphBuilder
                 // Cast required by PHPStan (string|false); the file comes from discover() so it is readable.
                 // @infection-ignore-all
                 $fileNodes = $this->extractor->extract((string) $code, $relativeFile);
+                // @infection-ignore-all
+                $rawEdges = array_merge($rawEdges, $this->extractor->extractEdges((string) $code));
             } catch (Error $error) {
                 $warnings[] = sprintf('Skipped unparsable file "%s": %s', $relativeFile, $error->getMessage());
                 continue;
@@ -48,9 +52,42 @@ final class GraphBuilder
         ksort($nodes);
 
         return new BuildResult(
-            ['version' => 1, 'nodes' => array_values($nodes), 'edges' => []],
+            ['version' => 1, 'nodes' => array_values($nodes), 'edges' => $this->resolveEdges($rawEdges, $nodes)],
             $warnings
         );
+    }
+
+    /**
+     * @param list<array{from: string, to: string}>                                                       $rawEdges
+     * @param array<string, array{id: string, name: string, ns: string, kind: string, file: string}>     $nodes
+     *
+     * @return list<array{from: string, to: string}>
+     */
+    private function resolveEdges(array $rawEdges, array $nodes): array
+    {
+        /** @var array<string, array<string, array{from: string, to: string}>> $byPair */
+        $byPair = [];
+        foreach ($rawEdges as $edge) {
+            if ($edge['from'] === $edge['to'] || !isset($nodes[$edge['to']])) {
+                continue;
+            }
+
+            $byPair[$edge['from']][$edge['to']] = $edge;
+        }
+
+        $edges = [];
+        foreach ($byPair as $byTo) {
+            foreach ($byTo as $edge) {
+                $edges[] = $edge;
+            }
+        }
+
+        usort(
+            $edges,
+            static fn (array $a, array $b): int => [$a['from'], $a['to']] <=> [$b['from'], $b['to']]
+        );
+
+        return $edges;
     }
 
     /**
