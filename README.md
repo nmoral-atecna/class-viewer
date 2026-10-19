@@ -6,11 +6,29 @@ classes PHP d'un projet. Pour la vision complète de la cible, voir [SPEC.md](SP
 ## État actuel
 
 Le binaire `bin/class-viewer` **extrait les nœuds et les arêtes de dépendance du
-graphe de classes** d'un projet cible et imprime un `graph.json` sur stdout, sans
-rien écrire ni installer dans le projet cible. Il découvre récursivement les
-fichiers `.php`, les parse avec nikic/php-parser (`NameResolver`) et émet un
-document JSON de la forme `{ "version": 1, "nodes": [...], "edges": [...] }`
-(voir le format en SPEC.md §4.2).
+graphe de classes** d'un projet cible, sans rien écrire ni installer dans le
+projet cible. Il découvre récursivement les fichiers `.php`, les parse avec
+nikic/php-parser (`NameResolver`) et construit un graphe de la forme
+`{ "version": 1, "nodes": [...], "edges": [...] }` (voir le format en SPEC.md §4.2).
+
+Par défaut, `php bin/class-viewer <projet>` **écrit un fichier `graph.html`
+autonome** dans le répertoire courant (jamais dans le projet cible) :
+
+- l'emplacement est configurable avec `--output <chemin>` (alias `-o`) ; les
+  répertoires parents manquants sont créés. Si l'écriture échoue (chemin invalide,
+  droits insuffisants…), la commande affiche un message d'erreur sur stderr et
+  sort en échec (exit ≠ 0) sans créer de fichier partiel ;
+- le HTML est **autonome** : CSS et JS sont inlinés, aucune référence externe
+  (`http(s)://`, `<link>`, `src=`, `fetch`/XHR). Le `graph.json` est embarqué dans
+  une balise `<script type="application/json">`, ouvrable directement en `file://`
+  par double-clic, sans serveur ;
+- le JSON embarqué est identique à celui produit par `--json`, avec les `<`
+  échappés (`<`) pour qu'un contenu tel que `</script>` ne rompe pas la balise ;
+- le **viewer** actuel est minimal (JS vanilla) : il lit le JSON embarqué et
+  affiche le nombre de nœuds, le nombre d'arêtes et la liste des FQCN des nœuds.
+  Le rendu graphique riche (SVG, ego-graph, interactions) viendra plus tard ;
+- avec `--json`, le binaire conserve l'ancien comportement : il imprime le
+  `graph.json` (pretty-print) sur **stdout** et n'écrit aucun fichier.
 
 - chaque déclaration `class` / `interface` / `enum` / `trait` d'un fichier donne
   un nœud `{ id, name, ns, kind, file }` où `id` est la FQCN pleinement résolue
@@ -72,7 +90,7 @@ Les nœuds external sont mêlés aux internes dans la liste unique triée par `i
 { "id": "Psr\\Log\\LoggerInterface", "name": "LoggerInterface", "ns": "Psr\\Log", "kind": "class", "file": "", "external": true }
 ```
 
-À venir (jalons suivants, cf. SPEC.md) : génération du HTML et build du PHAR.
+À venir (jalons suivants, cf. SPEC.md) : rendu graphique riche du viewer et build du PHAR.
 
 ## Prérequis
 
@@ -84,17 +102,19 @@ Aucun PHP ni Composer sur l'hôte : **tout passe par Docker**. L'image dev
 ```sh
 make build                     # construire l'image dev
 make install                   # installer les dépendances (composer install)
-make run ARGS="<chemin>"       # extraire le graph.json du projet cible (stdout)
+make run ARGS="<chemin>"       # écrire un graph.html autonome (dans le cwd du conteneur)
+make run ARGS="<chemin> --output <fichier.html>"   # écrire le HTML à cet emplacement
+make run ARGS="<chemin> --json"             # imprimer le graph.json sur stdout (pas de fichier)
 make run ARGS="<chemin> --include-vendor"   # + nœuds external pour les classes hors projet
 ```
 
 Exemple :
 
 ```sh
-make run ARGS="tests/fixtures/graph/nominal" | jq .
+make run ARGS="tests/fixtures/graph/nominal --json" | jq .
 ```
 
-Sortie type :
+Sortie type (`--json`) :
 
 ```json
 {
@@ -122,9 +142,16 @@ Cibles unitaires également disponibles : `make test` (PHPUnit), `make stan`
 
 - `bin/class-viewer` — bootstrap mince de l'application console.
 - `src/` — logique (PSR-4 `ClassViewer\`) :
-  - `src/Command/ScanCommand.php` — commande `scan` (glue : lit l'argument `path`
-    et l'option `--include-vendor`, appelle le builder, imprime le JSON sur stdout
-    et les avertissements sur stderr) ;
+  - `src/Command/ScanCommand.php` — commande `scan`, par défaut (glue : lit
+    l'argument `path` et les options `--include-vendor`, `--json`,
+    `--output`/`-o` ; appelle le builder, écrit les avertissements sur stderr ;
+    par défaut rend le `graph.html` via `HtmlRenderer` et l'écrit au chemin voulu
+    — échec propre si l'écriture échoue — ou, avec `--json`, imprime le JSON sur
+    stdout) ;
+  - `src/Html/HtmlRenderer.php` — rend le document HTML autonome : CSS/JS inlinés,
+    `graph.json` embarqué dans `<script type="application/json">` (avec `<`
+    échappé en `<`) et viewer vanilla JS minimal qui lit ce JSON et affiche
+    compteurs + liste des FQCN ;
   - `src/Graph/GraphBuilder.php` — découverte des fichiers, orchestration,
     déduplication des FQCN et tri des nœuds ; résolution des arêtes (filtre
     interne sur l'ensemble des nœuds, dédoublonnage, exclusion des
