@@ -3,6 +3,6 @@
   "private": true,
   "description": "Playwright checks for the client-side re-centring of graph.html (file://).",
   "scripts": {
-    "test": "node recenter.test.mjs"
+    "test": "node recenter.test.mjs && node search.test.mjs && node distance.test.mjs"
   }
 }
