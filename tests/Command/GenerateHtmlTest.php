@@ -161,7 +161,7 @@ final class GenerateHtmlTest extends TestCase
     {
         self::assertSame(
             1,
-            preg_match('#<script type="application/json"[^>]*>(.*)</script>#s', $html, $matches)
+            preg_match('#<script type="application/json"[^>]*>(.*?)</script>#s', $html, $matches)
         );
 
         return $matches[1];

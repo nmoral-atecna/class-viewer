@@ -26,6 +26,24 @@ final class HtmlRenderer
             <body>
             <main id="app"></main>
             <script type="application/json" id="graph">{$payload}</script>
+            <script>
+            (function () {
+                var graph = JSON.parse(document.getElementById('graph').textContent);
+                var nodes = graph.nodes || [];
+                var edges = graph.edges || [];
+                var app = document.getElementById('app');
+                var summary = document.createElement('p');
+                summary.textContent = nodes.length + ' nodes, ' + edges.length + ' edges';
+                var list = document.createElement('ul');
+                nodes.map(function (node) { return node.id; }).forEach(function (id) {
+                    var item = document.createElement('li');
+                    item.textContent = id;
+                    list.appendChild(item);
+                });
+                app.appendChild(summary);
+                app.appendChild(list);
+            })();
+            </script>
             </body>
             </html>
 
