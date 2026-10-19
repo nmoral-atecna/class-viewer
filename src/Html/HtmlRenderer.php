@@ -96,11 +96,47 @@ final class HtmlRenderer
                         '</g>';
                 }
 
-                var markup = '';
+                // Deterministic initial placement: radial around the focus, seeds the force engine.
                 neighbours.forEach(function (entry, i) {
                     var angle = (2 * Math.PI * i) / neighbours.length;
                     entry.x = cx + radius * Math.cos(angle);
                     entry.y = cy + radius * Math.sin(angle);
+                });
+
+                // Homemade force engine: bounded, deterministic relaxation of the neighbours.
+                // Focus is pinned at the centre; three forces act on each neighbour:
+                // repulsion between neighbours, spring toward the focus along its edge, centring.
+                var REPULSION = 90000, SPRING = 0.02, CENTERING = 0.01;
+                for (var step = 0; step < 300; step++) {
+                    for (var a = 0; a < neighbours.length; a++) {
+                        var na = neighbours[a], fx = 0, fy = 0;
+                        // Repulsion from every other neighbour.
+                        for (var b = 0; b < neighbours.length; b++) {
+                            if (a === b) { continue; }
+                            var nb = neighbours[b];
+                            var dx = na.x - nb.x, dy = na.y - nb.y;
+                            var d2 = dx * dx + dy * dy || 0.01;
+                            var f = REPULSION / d2;
+                            var d = Math.sqrt(d2);
+                            fx += (dx / d) * f;
+                            fy += (dy / d) * f;
+                        }
+                        // Spring toward the focus (edge rest length = radius).
+                        var sx = cx - na.x, sy = cy - na.y;
+                        var sd = Math.sqrt(sx * sx + sy * sy) || 0.01;
+                        var pull = SPRING * (sd - radius);
+                        fx += (sx / sd) * pull * sd;
+                        fy += (sy / sd) * pull * sd;
+                        // Centring toward the canvas centre.
+                        fx += (cx - na.x) * CENTERING;
+                        fy += (cy - na.y) * CENTERING;
+                        na.x += fx * 0.01;
+                        na.y += fy * 0.01;
+                    }
+                }
+
+                var markup = '';
+                neighbours.forEach(function (entry) {
                     // Outgoing: focus -> neighbour; incoming: neighbour -> focus. Same marker, opposite ends.
                     var x1 = entry.outgoing ? cx : entry.x, y1 = entry.outgoing ? cy : entry.y;
                     var x2 = entry.outgoing ? entry.x : cx, y2 = entry.outgoing ? entry.y : cy;
