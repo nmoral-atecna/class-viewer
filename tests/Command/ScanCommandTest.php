@@ -178,7 +178,7 @@ final class ScanCommandTest extends TestCase
         $command = $application->find('scan');
         $tester = new CommandTester($command);
 
-        $input = ['command' => $command->getName()];
+        $input = ['command' => $command->getName(), '--json' => true];
         if (null !== $path) {
             $input['path'] = $path;
         }
