@@ -250,6 +250,49 @@ final class GraphBuilderTest extends TestCase
     }
 
     #[Test]
+    public function deepFixtureIsADenseConnectedGraphForTheRadiusPerfCheck(): void
+    {
+        // C3.1: a connected `deep` graph — focus + 5 distance-1 neighbours,
+        // each wired to >=40 distance-2 classes, >=200 at distance 2 overall.
+        $graph = (new GraphBuilder())->build(self::FIXTURES . '/deep')->graph;
+
+        $adjacency = [];
+        foreach ($graph['edges'] as $edge) {
+            $adjacency[$edge['from']][] = $edge['to'];
+            $adjacency[$edge['to']][] = $edge['from'];
+        }
+
+        $distance = ['App\Focus' => 0];
+        $queue = ['App\Focus'];
+        while ($queue !== []) {
+            $id = array_shift($queue);
+            foreach ($adjacency[$id] ?? [] as $other) {
+                if (!isset($distance[$other])) {
+                    $distance[$other] = $distance[$id] + 1;
+                    $queue[] = $other;
+                }
+            }
+        }
+
+        $atOne = array_keys(array_filter($distance, static fn (int $d): bool => $d === 1));
+        $atTwo = array_filter($distance, static fn (int $d): bool => $d === 2);
+
+        self::assertCount(5, $atOne, 'focus must have exactly 5 distance-1 neighbours');
+        self::assertGreaterThanOrEqual(200, count($atTwo), 'at least 200 classes at distance 2');
+        foreach ($atOne as $neighbour) {
+            $farFromNeighbour = array_filter(
+                $adjacency[$neighbour] ?? [],
+                static fn (string $other): bool => ($distance[$other] ?? 0) === 2
+            );
+            self::assertGreaterThanOrEqual(
+                40,
+                count(array_unique($farFromNeighbour)),
+                $neighbour . ' must reach at least 40 distance-2 classes'
+            );
+        }
+    }
+
+    #[Test]
     public function sortsEdgesByFromThenTo(): void
     {
         // C5.1
