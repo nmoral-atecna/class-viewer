@@ -43,8 +43,17 @@ autonome** dans le répertoire courant (jamais dans le projet cible) :
   suggestions. Aucune correspondance affiche une liste vide (silencieuse, sans
   message). **Choisir une suggestion re-centre le graphe** sur cette classe, par le
   même chemin qu'un clic sur un nœud (redessin sur place, côté client, sans
-  rechargement) ; choisir la classe déjà au focus est sans effet. Le contrôle de
-  distance viendra plus tard ;
+  rechargement) ; choisir la classe déjà au focus est sans effet. Un **contrôle
+  de distance** (slider « rayon », `<input type="range">`, min 1 / max 3 / défaut
+  1) règle le rayon de voisinage affiché autour du focus : le graphe rend le focus
+  plus tous les nœuds à distance ≤ R, la distance étant mesurée par **BFS non
+  orienté** (les deux sens d'arête). R=1 = le comportement par défaut (focus +
+  voisins directs) ; élargir fait apparaître des nœuds plus lointains, resserrer
+  les retire. Les nœuds à **distance 2+** sont rendus en **points estompés**
+  (opacité réduite, sans label) et ne sont **pas cliquables** : seuls le focus et
+  les voisins directs (distance 1) restent cliquables et re-centrables. Régler le
+  slider **re-dessine le graphe sur place** (côté client, sans rechargement) ; le
+  réglage n'est pas conservé entre sessions ;
 - avec `--json`, le binaire conserve l'ancien comportement : il imprime le
   `graph.json` (pretty-print) sur **stdout** et n'écrit aucun fichier.
 
@@ -108,8 +117,7 @@ Les nœuds external sont mêlés aux internes dans la liste unique triée par `i
 { "id": "Psr\\Log\\LoggerInterface", "name": "LoggerInterface", "ns": "Psr\\Log", "kind": "class", "file": "", "external": true }
 ```
 
-À venir (jalons suivants, cf. SPEC.md) : contrôle de distance du voisinage et
-build du PHAR.
+À venir (jalons suivants, cf. SPEC.md) : build du PHAR.
 
 ## Prérequis
 
@@ -182,7 +190,16 @@ Cibles unitaires également disponibles : `make test` (PHPUnit), `make stan`
     autocomplétion maison en vanilla JS : à chaque frappe la liste est reconstruite
     en filtrant les nœuds par sous-chaîne insensible à la casse sur `id` (FQCN) ou
     `name` (nom court), en excluant les nœuds `external` ; chaque suggestion porte la
-    FQCN en `data-id` et cliquer un `<li>` appelle `recentre`. Aucune dépendance JS
+    FQCN en `data-id` et cliquer un `<li>` appelle `recentre`. Le contrôle de
+    distance (`<input id="radius" type="range" min="1" max="3">`) règle le rayon :
+    `draw(focus)` parcourt une **liste d'adjacence non orientée** (construite une
+    fois à partir des arêtes, les deux sens) en **BFS borné** par la valeur du
+    slider, répartit les nœuds à distance 1 en voisins cliquables placés par le
+    moteur de force, et dessine les nœuds à distance ≥ 2 en points estompés
+    (`.node.far`, `pointer-events:none`) posés sur un anneau externe **hors du
+    moteur de force** — le redraw reste fluide même avec beaucoup de nœuds
+    lointains, et aucune arête n'est tracée vers ces points. Le gestionnaire
+    `input` du slider redessine le graphe courant sur place. Aucune dépendance JS
     (pas de d3) : l'autonomie du HTML est préservée ;
   - `src/Graph/GraphBuilder.php` — découverte des fichiers, orchestration,
     déduplication des FQCN et tri des nœuds ; résolution des arêtes (filtre
