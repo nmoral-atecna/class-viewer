@@ -214,6 +214,42 @@ final class GraphBuilderTest extends TestCase
     }
 
     #[Test]
+    public function egoFixtureHasFocusWithOneIncomingAndOneOutgoingEdge(): void
+    {
+        // C1.1, C2.1: App\Consumer -> App\Focus (incoming), App\Focus -> App\Dep (outgoing).
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/ego');
+
+        self::assertSame(
+            ['App\Consumer', 'App\Dep', 'App\Focus'],
+            array_column($result->graph['nodes'], 'id')
+        );
+        self::assertSame(
+            [
+                ['from' => 'App\Consumer', 'to' => 'App\Focus'],
+                ['from' => 'App\Focus', 'to' => 'App\Dep'],
+            ],
+            $result->graph['edges']
+        );
+    }
+
+    #[Test]
+    public function largeFixtureHasManyNodesButFocusWithOnlyThreeNeighbours(): void
+    {
+        // C3.1: ~300 classes, the focus is connected to exactly 3 neighbours.
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/large');
+
+        self::assertCount(300, $result->graph['nodes']);
+        self::assertSame(
+            [
+                ['from' => 'App\Focus', 'to' => 'App\Dep1'],
+                ['from' => 'App\Focus', 'to' => 'App\Dep2'],
+                ['from' => 'App\Focus', 'to' => 'App\Dep3'],
+            ],
+            $result->graph['edges']
+        );
+    }
+
+    #[Test]
     public function sortsEdgesByFromThenTo(): void
     {
         // C5.1

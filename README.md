@@ -24,9 +24,16 @@ autonome** dans le répertoire courant (jamais dans le projet cible) :
   par double-clic, sans serveur ;
 - le JSON embarqué est identique à celui produit par `--json`, avec les `<`
   échappés (`<`) pour qu'un contenu tel que `</script>` ne rompe pas la balise ;
-- le **viewer** actuel est minimal (JS vanilla) : il lit le JSON embarqué et
-  affiche le nombre de nœuds, le nombre d'arêtes et la liste des FQCN des nœuds.
-  Le rendu graphique riche (SVG, ego-graph, interactions) viendra plus tard ;
+- le **viewer** actuel est un rendu SVG en **ego-graph** (JS vanilla) : il lit le
+  JSON embarqué et dessine le nœud **focus** au centre (le plus connecté ; les ex
+  æquo départagés par la FQCN la plus petite), étiqueté FQCN + namespace, entouré
+  de ses **voisins directs** (distance 1) des deux sens, étiquetés par leur nom
+  court. Les deux sens sont distingués par la **direction de la flèche** : sortant
+  (ce que le focus utilise) = flèche du focus vers le voisin ; entrant (ce qui
+  utilise le focus) = flèche du voisin vers le focus. Seul le voisinage du focus
+  est instancié, jamais le graphe complet. Un projet sans nœud affiche le message
+  « aucun nœud ». Le re-centrage au clic, la recherche et le contrôle de distance
+  viendront plus tard ;
 - avec `--json`, le binaire conserve l'ancien comportement : il imprime le
   `graph.json` (pretty-print) sur **stdout** et n'écrit aucun fichier.
 
@@ -90,7 +97,8 @@ Les nœuds external sont mêlés aux internes dans la liste unique triée par `i
 { "id": "Psr\\Log\\LoggerInterface", "name": "LoggerInterface", "ns": "Psr\\Log", "kind": "class", "file": "", "external": true }
 ```
 
-À venir (jalons suivants, cf. SPEC.md) : rendu graphique riche du viewer et build du PHAR.
+À venir (jalons suivants, cf. SPEC.md) : interactions du viewer (re-centrage au
+clic, recherche, contrôle de distance) et build du PHAR.
 
 ## Prérequis
 
@@ -150,8 +158,12 @@ Cibles unitaires également disponibles : `make test` (PHPUnit), `make stan`
     stdout) ;
   - `src/Html/HtmlRenderer.php` — rend le document HTML autonome : CSS/JS inlinés,
     `graph.json` embarqué dans `<script type="application/json">` (avec `<`
-    échappé en `<`) et viewer vanilla JS minimal qui lit ce JSON et affiche
-    compteurs + liste des FQCN ;
+    échappé en `<`) et viewer vanilla JS qui lit ce JSON et dessine l'ego-graph
+    SVG du focus. La disposition des voisins est calculée par un **moteur de force
+    maison** inliné (répulsion entre voisins + ressorts vers le focus + centrage),
+    déterministe — amorçage radial, pas d'aléatoire — et borné (boucle de
+    relaxation fixe), le focus épinglé au centre. Aucune dépendance JS (pas de d3) :
+    l'autonomie du HTML est préservée ;
   - `src/Graph/GraphBuilder.php` — découverte des fichiers, orchestration,
     déduplication des FQCN et tri des nœuds ; résolution des arêtes (filtre
     interne sur l'ensemble des nœuds, dédoublonnage, exclusion des
