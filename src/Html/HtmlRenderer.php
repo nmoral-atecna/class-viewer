@@ -24,7 +24,9 @@ final class HtmlRenderer
             <style>
             body{font-family:sans-serif;margin:1rem}
             svg .node circle{fill:#1f77b4}
+            svg .node.far circle{opacity:.3;pointer-events:none}
             svg .node text{font-size:12px}
+            #controls{margin-bottom:.5rem}
             svg .edge{stroke:#555;stroke-width:1.5}
             svg #arrow path{fill:#555}
             #search-box{margin-bottom:.5rem;position:relative;display:inline-block}
@@ -39,6 +41,10 @@ final class HtmlRenderer
             <div id="search-box">
             <input id="search" type="text" placeholder="rechercher une classe" autocomplete="off">
             <ul id="suggestions"></ul>
+            </div>
+            <div id="controls">
+            <label for="radius">rayon</label>
+            <input id="radius" type="range" min="1" max="3" value="1">
             </div>
             <main id="app"></main>
             <script type="application/json" id="graph">{$payload}</script>
@@ -63,6 +69,14 @@ final class HtmlRenderer
                 var byId = {};
                 nodes.forEach(function (node) { byId[node.id] = node; });
 
+                // Undirected adjacency (both edge senses), built once; drives the BFS by radius.
+                var adjacency = {};
+                function link(a, b) {
+                    if (!(a in byId) || !(b in byId) || a === b) { return; }
+                    (adjacency[a] = adjacency[a] || []).push(b);
+                }
+                edges.forEach(function (edge) { link(edge.from, edge.to); link(edge.to, edge.from); });
+
                 // Degree (incoming + outgoing) per node, to pick the initial focus.
                 var degrees = {};
                 nodes.forEach(function (node) { degrees[node.id] = 0; });
@@ -82,8 +96,14 @@ final class HtmlRenderer
 
                 var width = 960, height = 640, cx = width / 2, cy = height / 2, radius = 220;
 
-                function nodeMarkup(node, x, y, detailed) {
-                    // Focus: FQCN plus namespace. Neighbour: short name only.
+                function nodeMarkup(node, x, y, kind) {
+                    // focus: FQCN + namespace, detailed. near: short name, clickable.
+                    // far (distance >= 2): a dim point, no label, not clickable.
+                    if (kind === 'far') {
+                        return '<g class="node far" data-id="' + esc(node.id) + '">' +
+                            '<circle cx="' + x + '" cy="' + y + '" r="4"></circle></g>';
+                    }
+                    var detailed = kind === 'focus';
                     var text = detailed
                         ? node.id + (node.ns ? ' (' + node.ns + ')' : '')
                         : (node.name || node.id);
@@ -96,18 +116,36 @@ final class HtmlRenderer
                 // Rebuild and repaint the ego-graph around `focus`. Called once at load
                 // and again on every click, so a click re-centres without any navigation.
                 function draw(focus) {
-                    // Direct neighbours only, each with the arrow sense from the focus.
+                    var maxRadius = parseInt(document.getElementById('radius').value, 10) || 1;
+
+                    // Undirected BFS from the focus, bounded by the radius slider.
+                    var dist = {};
+                    dist[focus.id] = 0;
+                    var queue = [focus.id];
+                    while (queue.length) {
+                        var id = queue.shift();
+                        if (dist[id] >= maxRadius) { continue; }
+                        (adjacency[id] || []).forEach(function (other) {
+                            if (other in dist) { return; }
+                            dist[other] = dist[id] + 1;
+                            queue.push(other);
+                        });
+                    }
+
+                    // Distance 1 = clickable neighbours, laid out by the force engine.
+                    // Outgoing/incoming is only meaningful for direct edges with the focus.
                     var neighbours = [];
                     var seen = {};
-                    edges.forEach(function (edge) {
-                        var other = null;
-                        var outgoing = false;
-                        if (edge.from === focus.id && edge.to !== focus.id) { other = edge.to; outgoing = true; }
-                        else if (edge.to === focus.id && edge.from !== focus.id) { other = edge.from; outgoing = false; }
-                        if (other === null || !(other in byId) || other in seen) { return; }
+                    (adjacency[focus.id] || []).forEach(function (other) {
+                        if (dist[other] !== 1 || other in seen) { return; }
                         seen[other] = true;
+                        var outgoing = edges.some(function (e) { return e.from === focus.id && e.to === other; });
                         neighbours.push({ node: byId[other], outgoing: outgoing });
                     });
+
+                    // Distance >= 2 = dim points, no label, not clickable.
+                    var far = [];
+                    Object.keys(dist).forEach(function (id) { if (dist[id] >= 2) { far.push(byId[id]); } });
 
                     // Deterministic initial placement: radial around the focus, seeds the force engine.
                     neighbours.forEach(function (entry, i) {
@@ -158,9 +196,15 @@ final class HtmlRenderer
                             ' marker-end="url(#arrow)"></line>';
                     });
                     neighbours.forEach(function (entry) {
-                        markup += nodeMarkup(entry.node, entry.x, entry.y, false);
+                        markup += nodeMarkup(entry.node, entry.x, entry.y, 'near');
                     });
-                    markup += nodeMarkup(focus, cx, cy, true);
+                    // Far points sit on an outer ring; no edges are drawn to them (J1 scope).
+                    far.forEach(function (node, i) {
+                        var angle = (2 * Math.PI * i) / far.length;
+                        markup += nodeMarkup(node, cx + (radius + 120) * Math.cos(angle),
+                            cy + (radius + 120) * Math.sin(angle), 'far');
+                    });
+                    markup += nodeMarkup(focus, cx, cy, 'focus');
 
                     app.innerHTML = '<svg width="' + width + '" height="' + height + '"' +
                         ' viewBox="0 0 ' + width + ' ' + height + '">' +
@@ -181,8 +225,14 @@ final class HtmlRenderer
 
                 app.addEventListener('click', function (event) {
                     var g = event.target.closest('g.node');
-                    if (!g) { return; }
+                    // Far points (distance >= 2) are not clickable: they never re-centre.
+                    if (!g || g.classList.contains('far')) { return; }
                     recentre(byId[g.getAttribute('data-id')]);
+                });
+
+                // Changing the radius re-draws the current ego-graph in place.
+                document.getElementById('radius').addEventListener('input', function () {
+                    draw(current);
                 });
 
                 // Homemade search box: substring match, case-insensitive, on short name or
