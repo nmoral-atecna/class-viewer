@@ -32,8 +32,12 @@ autonome** dans le répertoire courant (jamais dans le projet cible) :
   (ce que le focus utilise) = flèche du focus vers le voisin ; entrant (ce qui
   utilise le focus) = flèche du voisin vers le focus. Seul le voisinage du focus
   est instancié, jamais le graphe complet. Un projet sans nœud affiche le message
-  « aucun nœud ». Le re-centrage au clic, la recherche et le contrôle de distance
-  viendront plus tard ;
+  « aucun nœud ». **Cliquer un nœud voisin le re-centre** : il devient le nouveau
+  focus détaillé (FQCN + namespace) et son propre voisinage direct (deux sens) est
+  recomposé. Le redessin se fait **sur place, entièrement côté client, sans
+  rechargement de page** ; l'ancien focus redevient un voisin simple s'il en est un,
+  sinon disparaît. Cliquer le focus courant est sans effet. La recherche et le
+  contrôle de distance viendront plus tard ;
 - avec `--json`, le binaire conserve l'ancien comportement : il imprime le
   `graph.json` (pretty-print) sur **stdout** et n'écrit aucun fichier.
 
@@ -97,8 +101,8 @@ Les nœuds external sont mêlés aux internes dans la liste unique triée par `i
 { "id": "Psr\\Log\\LoggerInterface", "name": "LoggerInterface", "ns": "Psr\\Log", "kind": "class", "file": "", "external": true }
 ```
 
-À venir (jalons suivants, cf. SPEC.md) : interactions du viewer (re-centrage au
-clic, recherche, contrôle de distance) et build du PHAR.
+À venir (jalons suivants, cf. SPEC.md) : interactions du viewer (recherche,
+contrôle de distance) et build du PHAR.
 
 ## Prérequis
 
@@ -162,8 +166,11 @@ Cibles unitaires également disponibles : `make test` (PHPUnit), `make stan`
     SVG du focus. La disposition des voisins est calculée par un **moteur de force
     maison** inliné (répulsion entre voisins + ressorts vers le focus + centrage),
     déterministe — amorçage radial, pas d'aléatoire — et borné (boucle de
-    relaxation fixe), le focus épinglé au centre. Aucune dépendance JS (pas de d3) :
-    l'autonomie du HTML est préservée ;
+    relaxation fixe), le focus épinglé au centre. Le dessin de l'ego-graph est une
+    fonction `draw(focus)` rappelée à chaque clic sur un nœud : elle recompose le
+    SVG en place autour du nœud cliqué (nouveau focus), sans navigation ni
+    rechargement ; un clic sur le focus courant est un no-op strict. Aucune
+    dépendance JS (pas de d3) : l'autonomie du HTML est préservée ;
   - `src/Graph/GraphBuilder.php` — découverte des fichiers, orchestration,
     déduplication des FQCN et tri des nœuds ; résolution des arêtes (filtre
     interne sur l'ensemble des nœuds, dédoublonnage, exclusion des

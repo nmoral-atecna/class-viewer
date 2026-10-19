@@ -6,3 +6,5 @@
 /.php-cs-fixer.cache
 /infection.log
 /graph.html
+/tests/e2e/.ego.html
+/tests/e2e/node_modules/
