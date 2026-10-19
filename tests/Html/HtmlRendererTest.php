@@ -71,9 +71,27 @@ final class HtmlRendererTest extends TestCase
 
         // neighbours are those adjacent to the focus id in either direction
         self::assertMatchesRegularExpression('#neighbou?rs?#i', $script);
-        // and the renderer places them radially around the focus (deterministic layout)
+        // deterministic initial placement is radial around the focus (seeds the force engine)
         self::assertMatchesRegularExpression('#Math\.cos#', $script);
         self::assertMatchesRegularExpression('#Math\.sin#', $script);
+    }
+
+    #[Test]
+    public function laysOutNodesWithABoundedHomemadeForceEngine(): void
+    {
+        // J2: a vanilla force engine (repulsion + springs + centering) runs a bounded,
+        // deterministic relaxation; no external dependency, no unseeded randomness.
+        $script = $this->inlineScript((new HtmlRenderer())->render(['version' => 1, 'nodes' => [], 'edges' => []]));
+
+        // bounded iteration loop (deterministic convergence, no infinite/while-true)
+        self::assertMatchesRegularExpression('#for\s*\(\s*var\s+\w+\s*=\s*0\s*;\s*\w+\s*<\s*\d+#', $script);
+        // the three forces of the engine
+        self::assertMatchesRegularExpression('#repuls#i', $script);
+        self::assertMatchesRegularExpression('#spring#i', $script);
+        self::assertMatchesRegularExpression('#cent(er|re|ring)#i', $script);
+        // no d3 / external force library, no unseeded Math.random
+        self::assertStringNotContainsString('d3', $script);
+        self::assertStringNotContainsString('Math.random', $script);
     }
 
     #[Test]
