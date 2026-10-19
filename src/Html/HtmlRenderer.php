@@ -27,9 +27,19 @@ final class HtmlRenderer
             svg .node text{font-size:12px}
             svg .edge{stroke:#555;stroke-width:1.5}
             svg #arrow path{fill:#555}
+            #search-box{margin-bottom:.5rem;position:relative;display:inline-block}
+            #suggestions{list-style:none;margin:0;padding:0;border:1px solid #ccc;
+                position:absolute;background:#fff;min-width:16rem;max-height:12rem;overflow:auto}
+            #suggestions:empty{display:none}
+            #suggestions li{padding:.2rem .5rem;cursor:pointer}
+            #suggestions li:hover{background:#eee}
             </style>
             </head>
             <body>
+            <div id="search-box">
+            <input id="search" type="text" placeholder="rechercher une classe" autocomplete="off">
+            <ul id="suggestions"></ul>
+            </div>
             <main id="app"></main>
             <script type="application/json" id="graph">{$payload}</script>
             <script>
@@ -160,16 +170,44 @@ final class HtmlRenderer
                         markup + '</svg>';
                 }
 
-                // Click to re-centre: redraw around the clicked node, in place, no navigation.
-                // Clicking the current focus is a strict no-op.
+                // Re-centre: redraw around a node, in place, no navigation.
+                // Re-centring on the current focus is a strict no-op.
                 var current = focus;
+                function recentre(node) {
+                    if (!node || node.id === current.id) { return; }
+                    current = node;
+                    draw(current);
+                }
+
                 app.addEventListener('click', function (event) {
                     var g = event.target.closest('g.node');
                     if (!g) { return; }
-                    var clicked = byId[g.getAttribute('data-id')];
-                    if (!clicked || clicked.id === current.id) { return; }
-                    current = clicked;
-                    draw(current);
+                    recentre(byId[g.getAttribute('data-id')]);
+                });
+
+                // Homemade search box: substring match, case-insensitive, on short name or
+                // FQCN; external/vendor nodes are excluded. No match = silent empty list.
+                var search = document.getElementById('search');
+                var suggestions = document.getElementById('suggestions');
+                search.addEventListener('input', function () {
+                    var query = search.value.toLowerCase();
+                    suggestions.innerHTML = '';
+                    if (query === '') { return; }
+                    nodes.forEach(function (node) {
+                        if (node.external) { return; }
+                        var name = (node.name || '').toLowerCase();
+                        if (node.id.toLowerCase().indexOf(query) === -1 &&
+                            name.indexOf(query) === -1) { return; }
+                        var li = document.createElement('li');
+                        li.setAttribute('data-id', node.id);
+                        li.textContent = node.id;
+                        suggestions.appendChild(li);
+                    });
+                });
+                suggestions.addEventListener('click', function (event) {
+                    var li = event.target.closest('li');
+                    if (!li) { return; }
+                    recentre(byId[li.getAttribute('data-id')]);
                 });
 
                 draw(focus);
