@@ -1,5 +1,5 @@
 IMAGE := class-viewer-dev:issue-1
-DOCKER := docker run --rm -v "$(CURDIR)":/app -w /app $(IMAGE)
+DOCKER := docker run --rm -u "$(shell id -u):$(shell id -g)" -e HOME=/tmp -v "$(CURDIR)":/app -w /app $(IMAGE)
 
 .PHONY: build install test stan cs cs-fix infection check run
 
