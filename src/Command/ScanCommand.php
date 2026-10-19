@@ -8,6 +8,7 @@ use ClassViewer\Graph\GraphBuilder;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
@@ -23,6 +24,12 @@ final class ScanCommand extends Command
     protected function configure(): void
     {
         $this->addArgument('path', InputArgument::REQUIRED, 'Path to the target PHP project directory.');
+        $this->addOption(
+            'include-vendor',
+            null,
+            InputOption::VALUE_NONE,
+            'Emit referenced out-of-project classes as external nodes.'
+        );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -39,7 +46,7 @@ final class ScanCommand extends Command
             return Command::FAILURE;
         }
 
-        $result = $this->builder->build($path);
+        $result = $this->builder->build($path, true === $input->getOption('include-vendor'));
 
         foreach ($result->warnings as $warning) {
             $errorStyle->writeln(sprintf('<comment>%s</comment>', $warning));

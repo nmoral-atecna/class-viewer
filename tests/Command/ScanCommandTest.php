@@ -86,6 +86,33 @@ final class ScanCommandTest extends TestCase
     }
 
     #[Test]
+    public function emitsExternalNodesWhenIncludeVendorFlagIsSet(): void
+    {
+        // C2.1, C3.1
+        $tester = $this->runScan(self::GRAPH . '/edges/external', true);
+
+        self::assertSame(0, $tester->getStatusCode());
+        $graph = $this->decode($tester);
+        $byId = array_column($graph['nodes'], null, 'id');
+
+        self::assertArrayHasKey('Psr\Log\LoggerInterface', $byId);
+        self::assertTrue($byId['Psr\Log\LoggerInterface']['external']);
+        self::assertArrayNotHasKey('external', $byId['App\Foo']);
+        self::assertCount(3, $graph['edges']);
+    }
+
+    #[Test]
+    public function dropsExternalNodesWithoutIncludeVendorFlag(): void
+    {
+        // C1.1
+        $tester = $this->runScan(self::GRAPH . '/edges/external');
+
+        $graph = $this->decode($tester);
+        self::assertSame(['App\Foo'], array_column($graph['nodes'], 'id'));
+        self::assertSame([], $graph['edges']);
+    }
+
+    #[Test]
     public function doesNotWriteIntoTargetDirectory(): void
     {
         // C1: rien écrit dans le projet cible
@@ -132,17 +159,17 @@ final class ScanCommandTest extends TestCase
     }
 
     /**
-     * @return array{version: int, nodes: list<array<string, string>>, edges: list<mixed>}
+     * @return array{version: int, nodes: list<array<string, mixed>>, edges: list<mixed>}
      */
     private function decode(CommandTester $tester): array
     {
-        /** @var array{version: int, nodes: list<array<string, string>>, edges: list<mixed>} $graph */
+        /** @var array{version: int, nodes: list<array<string, mixed>>, edges: list<mixed>} $graph */
         $graph = json_decode($tester->getDisplay(), true, 512, JSON_THROW_ON_ERROR);
 
         return $graph;
     }
 
-    private function runScan(?string $path): CommandTester
+    private function runScan(?string $path, bool $includeVendor = false): CommandTester
     {
         $application = new Application();
         $application->add(new ScanCommand());
@@ -154,6 +181,9 @@ final class ScanCommandTest extends TestCase
         $input = ['command' => $command->getName()];
         if (null !== $path) {
             $input['path'] = $path;
+        }
+        if ($includeVendor) {
+            $input['--include-vendor'] = true;
         }
 
         $tester->execute($input, ['capture_stderr_separately' => true]);

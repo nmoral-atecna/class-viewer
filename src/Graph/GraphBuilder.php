@@ -13,7 +13,7 @@ final class GraphBuilder
     ) {
     }
 
-    public function build(string $directory): BuildResult
+    public function build(string $directory, bool $includeVendor = false): BuildResult
     {
         $warnings = [];
         /** @var array<string, array{id: string, name: string, ns: string, kind: string, file: string}> $nodes */
@@ -49,6 +49,10 @@ final class GraphBuilder
             }
         }
 
+        if ($includeVendor) {
+            $nodes = $this->addExternalNodes($nodes, $rawEdges);
+        }
+
         ksort($nodes);
 
         return new BuildResult(
@@ -58,8 +62,36 @@ final class GraphBuilder
     }
 
     /**
-     * @param list<array{from: string, to: string}>                                                       $rawEdges
-     * @param array<string, array{id: string, name: string, ns: string, kind: string, file: string}>     $nodes
+     * @param array<string, array{id: string, name: string, ns: string, kind: string, file: string}> $nodes
+     * @param list<array{from: string, to: string}>                                                   $rawEdges
+     *
+     * @return array<string, array{id: string, name: string, ns: string, kind: string, file: string, external?: true}>
+     */
+    private function addExternalNodes(array $nodes, array $rawEdges): array
+    {
+        foreach ($rawEdges as $edge) {
+            $to = $edge['to'];
+            if ($edge['from'] === $to || isset($nodes[$to])) {
+                continue;
+            }
+
+            $position = strrpos($to, '\\');
+            $nodes[$to] = [
+                'id' => $to,
+                'name' => false === $position ? $to : substr($to, $position + 1),
+                'ns' => false === $position ? '' : substr($to, 0, $position),
+                'kind' => 'class',
+                'file' => '',
+                'external' => true,
+            ];
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * @param list<array{from: string, to: string}>                                                              $rawEdges
+     * @param array<string, array{id: string, name: string, ns: string, kind: string, file: string, external?: true}> $nodes
      *
      * @return list<array{from: string, to: string}>
      */

@@ -23,8 +23,11 @@ document JSON de la forme `{ "version": 1, "nodes": [...], "edges": [...] }`
   corps (`new`, `::class` / `::CONST`, appel statique, propriété statique,
   `instanceof`) ou un attribut de classe (`#[...]`) ; les types union, nullables
   et intersection sont parcourus membre par membre ;
-- seules les dépendances **internes** sont gardées : une référence vers une classe
-  vendor ou native PHP (sans nœud) ne produit aucune arête ;
+- par défaut, seules les dépendances **internes** sont gardées : une référence vers
+  une classe vendor ou native PHP (sans nœud du projet) ne produit ni nœud ni arête ;
+  avec `--include-vendor`, chaque FQCN hors projet réellement référencée (vendor **et**
+  natifs PHP) devient un nœud marqué `external: true` et les arêtes vers elle sont
+  conservées (voir « Classes externes » plus bas) ;
 - l'héritage (`extends`, `implements`, trait `use`) ne produit **aucune** arête,
   même vers une classe interne ;
 - les auto-références sont exclues (`self`, `static`, `parent`, ou la classe par
@@ -45,8 +48,31 @@ document JSON de la forme `{ "version": 1, "nodes": [...], "edges": [...] }`
 - un chemin absent ou qui n'est pas un répertoire provoque une sortie en erreur
   (exit ≠ 0, message sur stderr) ; l'absence d'argument affiche l'usage.
 
-À venir (jalons suivants, cf. SPEC.md) : marquage des classes externes
-(`--include-vendor`), génération du HTML et build du PHAR.
+### Classes externes (`--include-vendor`)
+
+Sans le drapeau, les classes hors projet sont invisibles (ni nœud, ni arête). Avec
+`--include-vendor`, chaque FQCN hors projet réellement référencée est matérialisée
+comme nœud external. Aucun scan de `vendor/` n'est effectué : seules les classes
+citées par le code du projet apparaissent, et leur vrai type (`class`/`interface`/…)
+ou fichier n'est pas résolu (pas de classmap).
+
+Un nœud external reprend le format du viewer plus un champ `external: true` :
+
+- `id` — la FQCN référencée ;
+- `name` — dernier segment de la FQCN ;
+- `ns` — préfixe de namespace (vide pour une classe native sans namespace) ;
+- `kind` — `"class"` par défaut (type réel inconnu sans parser le vendor) ;
+- `file` — `""` ;
+- `external` — `true`.
+
+Les nœuds du projet ne portent **pas** de champ `external` (absent, pas `false`).
+Les nœuds external sont mêlés aux internes dans la liste unique triée par `id`.
+
+```json
+{ "id": "Psr\\Log\\LoggerInterface", "name": "LoggerInterface", "ns": "Psr\\Log", "kind": "class", "file": "", "external": true }
+```
+
+À venir (jalons suivants, cf. SPEC.md) : génération du HTML et build du PHAR.
 
 ## Prérequis
 
@@ -59,6 +85,7 @@ Aucun PHP ni Composer sur l'hôte : **tout passe par Docker**. L'image dev
 make build                     # construire l'image dev
 make install                   # installer les dépendances (composer install)
 make run ARGS="<chemin>"       # extraire le graph.json du projet cible (stdout)
+make run ARGS="<chemin> --include-vendor"   # + nœuds external pour les classes hors projet
 ```
 
 Exemple :
@@ -95,13 +122,15 @@ Cibles unitaires également disponibles : `make test` (PHPUnit), `make stan`
 
 - `bin/class-viewer` — bootstrap mince de l'application console.
 - `src/` — logique (PSR-4 `ClassViewer\`) :
-  - `src/Command/ScanCommand.php` — commande `scan` (glue : appelle le builder,
-    imprime le JSON sur stdout et les avertissements sur stderr) ;
+  - `src/Command/ScanCommand.php` — commande `scan` (glue : lit l'argument `path`
+    et l'option `--include-vendor`, appelle le builder, imprime le JSON sur stdout
+    et les avertissements sur stderr) ;
   - `src/Graph/GraphBuilder.php` — découverte des fichiers, orchestration,
     déduplication des FQCN et tri des nœuds ; résolution des arêtes (filtre
     interne sur l'ensemble des nœuds, dédoublonnage, exclusion des
-    auto-références, tri par `(from, to)`) ; renvoie un `BuildResult`
-    (`graph` + `warnings`) ;
+    auto-références, tri par `(from, to)`) ; avec `--include-vendor`, matérialise
+    les FQCN référencées hors projet en nœuds `external: true` ; renvoie un
+    `BuildResult` (`graph` + `warnings`) ;
   - `src/Graph/NodeExtractor.php` — parse un fichier via nikic/php-parser et le
     `NameResolver` ; expose `extract()` (nœuds) et `extractEdges()` (arêtes
     candidates brutes) ;

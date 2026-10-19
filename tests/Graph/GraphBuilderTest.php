@@ -144,6 +144,76 @@ final class GraphBuilderTest extends TestCase
     }
 
     #[Test]
+    public function keepsExternalReferencesAsMarkedNodesWhenVendorIncluded(): void
+    {
+        // C2.1
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/edges/external', true);
+
+        self::assertSame(
+            ['App\Foo', 'DateTimeImmutable', 'Psr\Log\LoggerInterface', 'Vendor\Lib\Client'],
+            array_column($result->graph['nodes'], 'id')
+        );
+        self::assertSame(
+            [
+                ['from' => 'App\Foo', 'to' => 'DateTimeImmutable'],
+                ['from' => 'App\Foo', 'to' => 'Psr\Log\LoggerInterface'],
+                ['from' => 'App\Foo', 'to' => 'Vendor\Lib\Client'],
+            ],
+            $result->graph['edges']
+        );
+    }
+
+    #[Test]
+    public function marksOnlyExternalNodesWithExternalFlag(): void
+    {
+        // C3.1, C3.2, C2.2
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/edges/external', true);
+
+        $byId = array_column($result->graph['nodes'], null, 'id');
+
+        self::assertArrayNotHasKey('external', $byId['App\Foo']);
+        self::assertSame(
+            ['id' => 'Psr\Log\LoggerInterface', 'name' => 'LoggerInterface', 'ns' => 'Psr\Log', 'kind' => 'class', 'file' => '', 'external' => true],
+            $byId['Psr\Log\LoggerInterface']
+        );
+        self::assertSame(
+            ['id' => 'DateTimeImmutable', 'name' => 'DateTimeImmutable', 'ns' => '', 'kind' => 'class', 'file' => '', 'external' => true],
+            $byId['DateTimeImmutable']
+        );
+    }
+
+    #[Test]
+    public function doesNotMarkInternalDependenciesAsExternalWhenVendorIncluded(): void
+    {
+        // C2.2: App\Foo depends on App\Bar, both project nodes; no external flag, no duplicate.
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/edges/dedup', true);
+
+        $ids = array_column($result->graph['nodes'], 'id');
+        self::assertSame(['App\Bar', 'App\Foo'], $ids);
+        foreach ($result->graph['nodes'] as $node) {
+            self::assertArrayNotHasKey('external', $node);
+        }
+    }
+
+    #[Test]
+    public function sortsExternalAndInternalNodesTogetherById(): void
+    {
+        // C2.3: unique list sorted by id, externals interleaved with internals.
+        $result = (new GraphBuilder())->build(self::FIXTURES . '/edges/external_mixed', true);
+
+        self::assertSame(
+            ['Acme\Alpha', 'App\Bar', 'App\Zeta', 'Zzz\Omega'],
+            array_column($result->graph['nodes'], 'id')
+        );
+
+        $byId = array_column($result->graph['nodes'], null, 'id');
+        self::assertTrue($byId['Acme\Alpha']['external']);
+        self::assertTrue($byId['Zzz\Omega']['external']);
+        self::assertArrayNotHasKey('external', $byId['App\Bar']);
+        self::assertArrayNotHasKey('external', $byId['App\Zeta']);
+    }
+
+    #[Test]
     public function sortsEdgesByFromThenTo(): void
     {
         // C5.1
