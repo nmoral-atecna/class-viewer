@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ClassViewer\Command;
 
 use ClassViewer\Graph\GraphBuilder;
+use ClassViewer\Html\HtmlRenderer;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -13,11 +14,13 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'scan', description: 'Extract the class graph of a target project as JSON.')]
+#[AsCommand(name: 'scan', description: 'Generate a self-contained graph.html of a target project.')]
 final class ScanCommand extends Command
 {
-    public function __construct(private readonly GraphBuilder $builder = new GraphBuilder())
-    {
+    public function __construct(
+        private readonly GraphBuilder $builder = new GraphBuilder(),
+        private readonly HtmlRenderer $renderer = new HtmlRenderer(),
+    ) {
         parent::__construct();
     }
 
@@ -29,6 +32,18 @@ final class ScanCommand extends Command
             null,
             InputOption::VALUE_NONE,
             'Emit referenced out-of-project classes as external nodes.'
+        );
+        $this->addOption(
+            'json',
+            null,
+            InputOption::VALUE_NONE,
+            'Print the pretty graph.json on stdout instead of writing graph.html.'
+        );
+        $this->addOption(
+            'output',
+            'o',
+            InputOption::VALUE_REQUIRED,
+            'Path of the generated HTML file (default: ./graph.html).'
         );
     }
 
@@ -52,10 +67,30 @@ final class ScanCommand extends Command
             $errorStyle->writeln(sprintf('<comment>%s</comment>', $warning));
         }
 
-        $encoded = json_encode($result->graph, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
-        // Cast required by PHPStan (string|false); JSON_THROW_ON_ERROR guarantees a string or an exception.
-        // @infection-ignore-all
-        $output->writeln((string) $encoded);
+        if (true === $input->getOption('json')) {
+            $encoded = json_encode($result->graph, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+            // Cast required by PHPStan (string|false); JSON_THROW_ON_ERROR guarantees a string or an exception.
+            // @infection-ignore-all
+            $output->writeln((string) $encoded);
+
+            return Command::SUCCESS;
+        }
+
+        /** @var string|null $outputPath */
+        $outputPath = $input->getOption('output');
+        $outputPath ??= 'graph.html';
+
+        $directory = \dirname($outputPath);
+        // @mkdir avale le warning de course (R2) : un répertoire déjà créé laisse is_dir vrai.
+        if (!is_dir($directory)) {
+            @mkdir($directory, recursive: true);
+        }
+
+        if (false === @file_put_contents($outputPath, $this->renderer->render($result->graph))) {
+            $errorStyle->writeln(sprintf('<error>Impossible d\'écrire le fichier "%s".</error>', $outputPath));
+
+            return Command::FAILURE;
+        }
 
         return Command::SUCCESS;
     }
