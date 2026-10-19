@@ -81,11 +81,16 @@ final class ScanCommand extends Command
         $outputPath ??= 'graph.html';
 
         $directory = \dirname($outputPath);
+        // @mkdir avale le warning de course (R2) : un répertoire déjà créé laisse is_dir vrai.
         if (!is_dir($directory)) {
-            mkdir($directory, recursive: true);
+            @mkdir($directory, recursive: true);
         }
 
-        file_put_contents($outputPath, $this->renderer->render($result->graph));
+        if (false === @file_put_contents($outputPath, $this->renderer->render($result->graph))) {
+            $errorStyle->writeln(sprintf('<error>Impossible d\'écrire le fichier "%s".</error>', $outputPath));
+
+            return Command::FAILURE;
+        }
 
         return Command::SUCCESS;
     }

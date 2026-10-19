@@ -143,6 +143,20 @@ final class ScanCommandTest extends TestCase
     }
 
     #[Test]
+    public function failsWhenOutputCannotBeWritten(): void
+    {
+        // R1: le répertoire parent du --output est un fichier → mkdir/écriture impossibles
+        $blocker = self::GRAPH . '/nominal/src/Status.php';
+        $outputPath = $blocker . '/graph.html';
+
+        $tester = $this->runHtmlScan(self::GRAPH . '/nominal', $outputPath);
+
+        self::assertNotSame(0, $tester->getStatusCode());
+        self::assertNotSame('', trim($tester->getErrorOutput()));
+        self::assertFileDoesNotExist($outputPath);
+    }
+
+    #[Test]
     public function failsWhenArgumentMissing(): void
     {
         $application = new Application();
@@ -187,6 +201,23 @@ final class ScanCommandTest extends TestCase
         }
 
         $tester->execute($input, ['capture_stderr_separately' => true]);
+
+        return $tester;
+    }
+
+    private function runHtmlScan(string $path, string $outputPath): CommandTester
+    {
+        $application = new Application();
+        $application->add(new ScanCommand());
+        $application->setAutoExit(false);
+
+        $command = $application->find('scan');
+        $tester = new CommandTester($command);
+
+        $tester->execute(
+            ['command' => $command->getName(), 'path' => $path, '--output' => $outputPath],
+            ['capture_stderr_separately' => true]
+        );
 
         return $tester;
     }
